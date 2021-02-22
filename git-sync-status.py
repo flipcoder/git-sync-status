@@ -5,54 +5,57 @@ import configparser
 import socket
 import subprocess
 import datetime
+from pathlib import Path
 
 def ensure_path_exists(*folders):
     for folder in folders:
-        try:
-            os.makedirs(folder)
-        except FileExistsError:
-            continue
+        os.makedirs(folder, exist_ok=True)
 
-RC = os.path.expanduser('~/.git-sync-status')
+RC = Path.home() / '.git-sync-status'
 
 cfg = configparser.ConfigParser()
 cfg.read(RC)
 global_cfg = cfg['global']
-projects_folder = os.path.expanduser(global_cfg['projects_folder'])
-sync_folder = os.path.expanduser(global_cfg['sync_folder'])
+projects_folder = Path(global_cfg['projects_folder']).expanduser()
+sync_folder = Path(global_cfg['sync_folder']).expanduser()
 hostname = socket.gethostname()
-hostname_sync_folder = os.path.join(sync_folder, hostname)
+hostname_sync_folder = sync_folder / hostname
 
-# TODO: make folders
+# make folders
 ensure_path_exists(projects_folder, hostname_sync_folder)
 
-# TODO: for each project, do git status and copy that information
-for folder in os.listdir(projects_folder):
-    working_dir = os.path.join(projects_folder, folder)
-    if os.path.isdir(working_dir):
-        print('Syncing', folder + '...')
-        
+# for each project, do git status and copy that information
+for folder in projects_folder.iterdir():
+    foldername = folder.name
+    
+    if folder.is_dir():
         try:
-            out = subprocess.check_output('git status --porcelain', cwd=working_dir, shell=True)
+            out = subprocess.check_output(
+                'git status --porcelain',
+                cwd=folder,
+                shell=True,
+                stderr=subprocess.DEVNULL
+            )
         except subprocess.CalledProcessError:
             continue # non-zero exit status (not repository
         
         out = ''.join(str(out, 'utf-8'))
         
-        sync_file = os.path.join(hostname_sync_folder, folder+'.txt')
+        sync_file = hostname_sync_folder / (foldername+'.txt')
         write = True
         try:
-            with open(sync_file, 'r') as f:
+            with sync_file.open() as f:
                 if out == f.read():
-                    write = False
+                    write = False # file contents match, don't write
         except FileNotFoundError:
-            write = True
+            pass # write
         
         if write:
-            with open(sync_file, 'w') as f:
+            print('Syncing', foldername + '...')
+            with sync_file.open('w') as f:
                 f.write(out)
 
-with open(os.path.join(hostname_sync_folder, 'timestamp'), 'w') as f:
+with (hostname_sync_folder / 'timestamp').open('w') as f:
     ts = datetime.datetime.now()
     f.write(str(ts))
     print('Done @', ts)
