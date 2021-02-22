@@ -40,7 +40,7 @@ for folder in os.listdir(projects_folder):
         out = ''.join(str(out, 'utf-8'))
         
         sync_file = os.path.join(hostname_sync_folder, folder+'.txt')
-        write = False
+        write = True
         try:
             with open(sync_file, 'r') as f:
                 if out == f.read():
